@@ -191,4 +191,14 @@ namespace Piccolo
         m_gobjects.erase(go_id);
     }
 
+    void Level::generateMaze() {
+        //
+
+        //
+
+        //
+
+        //
+    }
+
 } // namespace Piccolo

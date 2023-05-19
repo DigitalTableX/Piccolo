@@ -26,6 +26,8 @@ namespace Piccolo
 
         bool save();
 
+        void generateMaze();
+
         void tick(float delta_time);
 
         const std::string& getLevelResUrl() const { return m_level_res_url; }
