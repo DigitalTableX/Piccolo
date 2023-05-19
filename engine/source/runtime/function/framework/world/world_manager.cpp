@@ -159,4 +159,15 @@ namespace Piccolo
 
         active_level->save();
     }
+
+    void WorldManager::generateMazeLevel() {
+		auto active_level = m_current_active_level.lock();
+        
+        if (active_level == nullptr)
+        {
+			LOG_ERROR("no active level");
+			return;
+		}
+		active_level->generateMaze();
+	}
 } // namespace Piccolo
