@@ -11,6 +11,7 @@
 #include "runtime/function/particle/particle_manager.h"
 #include "runtime/function/physics/physics_manager.h"
 #include "runtime/function/physics/physics_scene.h"
+#include "runtime/function/render/render_system.h"
 #include <limits>
 
 namespace Piccolo
@@ -135,6 +136,208 @@ namespace Piccolo
         return is_save_success;
     }
 
+    void Level::generateMaze()
+    {
+        //
+        LevelObjectsMap::iterator iter = m_gobjects.begin();
+        while (iter != m_gobjects.end())
+        {
+            //
+            RenderSwapContext& swap_context = g_runtime_global_context.m_render_system->getSwapContext();
+            swap_context.getLogicSwapData().addDeleteGameObject(GameObjectDesc {iter->first, {}});
+            //
+            deleteGObjectByID(iter->first);
+            iter = m_gobjects.begin();
+        }
+        //
+        ObjectInstanceRes Ground;
+        Ground.m_name       = "Ground";
+        Ground.m_definition = "asset/objects/environment/floor/floor.object.json";
+        createObject(Ground);
+        //
+        ObjectInstanceRes Player;
+        Player.m_name       = "Player";
+        Player.m_definition = "asset/objects/character/player/player.object.json";
+        createObject(Player);
+        //
+        const int cols = 5;
+        const int rows = 8;
+        //
+        int mazeTypes[rows][cols];
+        bool mazeDoors[rows][cols][4];
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < cols; j++)
+            {
+				mazeTypes[i][j] = cols * i + j;
+                for (int k = 0; k < 4; k++)
+                {
+					mazeDoors[i][j][k] = false;
+				}
+			}
+		}
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < cols; j++)
+            {
+                std::vector<int> candidateDoorDir;
+                //
+                if (i > 0 && mazeTypes[i][j] != mazeTypes[i - 1][j])
+                {
+                    candidateDoorDir.push_back(0);
+                }
+                //
+                if (j < cols - 1 && mazeTypes[i][j] != mazeTypes[i][j + 1])
+                {
+                    candidateDoorDir.push_back(1);
+                }
+                //
+                if (i < rows - 1 && mazeTypes[i][j] != mazeTypes[i + 1][j])
+                {
+					candidateDoorDir.push_back(2);
+				}
+                //
+                if (j > 0 && mazeTypes[i][j] != mazeTypes[i][j - 1])
+                {
+                    candidateDoorDir.push_back(3);
+                }
+                if (candidateDoorDir.size() == 0)
+                {
+                    break;
+                }
+                //
+                int openDoorDir = candidateDoorDir[std::rand() % candidateDoorDir.size()];
+                int newRoomID;
+                //
+                mazeDoors[i][j][openDoorDir] = true;
+                if (openDoorDir == 0)
+                {
+                    mazeDoors[i - 1][j][2] = true;
+                    newRoomID = mazeTypes[i - 1][j];
+                }
+                else if (openDoorDir == 1)
+                {
+					mazeDoors[i][j + 1][3] = true;
+					newRoomID = mazeTypes[i][j + 1];
+				}
+                else if (openDoorDir == 2)
+                {
+					mazeDoors[i + 1][j][0] = true;
+					newRoomID = mazeTypes[i + 1][j];
+				}
+                else if (openDoorDir == 3)
+                {
+					mazeDoors[i][j - 1][1] = true;
+					newRoomID = mazeTypes[i][j - 1];
+                }
+                //
+                int oldRoomID = mazeTypes[i][j];
+                for (int ii = 0; ii < rows; ii++)
+                {
+                    for (int jj = 0; jj < cols; jj++)
+                    {
+                        if (mazeTypes[ii][jj] == oldRoomID)
+                        {
+							mazeTypes[ii][jj] = newRoomID;
+						}
+					}
+                }
+            }
+        }
+
+        //
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < cols; j++)
+            {
+                //
+                if (!mazeDoors[i][j][0])
+                {
+                    int wallNum = i * (2 * cols + 1) + j;
+                    ObjectInstanceRes Wall;
+                    Wall.m_name       = "Wall_" + std::to_string(wallNum);
+                    Wall.m_definition = "asset/objects/environment/wall/wall.object.json";
+                    createObject(Wall);
+                }
+                //
+                if (!mazeDoors[i][j][3])
+                {
+					int wallNum = i * (2 * cols + 1) + j + cols;
+					ObjectInstanceRes Wall;
+					Wall.m_name       = "Wall_" + std::to_string(wallNum);
+					Wall.m_definition = "asset/objects/environment/wall/wall.object.json";
+					createObject(Wall);
+				}
+                //
+                if (j == cols - 1)
+                {
+                    int wallNum = i * (2 * cols + 1) + j + cols + 1;
+                    ObjectInstanceRes Wall;
+                    Wall.m_name       = "Wall_" + std::to_string(wallNum);
+                    Wall.m_definition = "asset/objects/environment/wall/wall.object.json";
+                    createObject(Wall);
+                }
+                //
+                if (i == rows - 1)
+                {
+                    int wallNum = i * (2 * cols + 1) + j + 2 * cols + 1;
+                    ObjectInstanceRes Wall;
+                    Wall.m_name       = "Wall_" + std::to_string(wallNum);
+                    Wall.m_definition = "asset/objects/environment/wall/wall.object.json";
+                    createObject(Wall);
+                }
+            }
+        }
+
+        //
+        for (const auto& object_pair : m_gobjects)
+        {
+            std::shared_ptr<GObject> object = object_pair.second;
+            if (object == nullptr)
+                continue;
+
+            std::cout << object->getName();
+
+            if ("Player" == object->getName())
+            {
+                m_current_active_character = std::make_shared<Character>(object);
+                continue;
+            }
+
+
+            for (int i = 0; i < rows * (2 * cols + 1) + cols; i++)
+            {
+                if (("Wall_" + std::to_string(i)) == (object->getName()))
+                {
+                    int rowNum = int(i / (2 * cols + 1));
+                    int colNum = i % (2 * cols + 1);
+                    TransformComponent* transform_component = object->tryGetComponent(TransformComponent);
+                    Vector3             new_translation;
+                    Quaternion          new_rotation;
+                    if (colNum < cols)
+                    {
+                        new_translation.x = -10 - 10 * (rows - 1) / 2 + rowNum * 10;
+                        new_translation.y = -10 * (cols - 1) / 2 + colNum * 10;
+                        new_translation.z = 0;
+                    }
+                    else
+                    {
+                        colNum -= cols;
+                        new_translation.x = -5 - 10 * (rows - 1) / 2 + rowNum * 10;
+                        new_translation.y = -5 - 10 * (cols - 1) / 2 + colNum * 10;
+                        Vector3 axis(0, 0, 1);
+                        Degree  d(90.0);
+                        Radian  angle(d);
+                        new_rotation.fromAngleAxis(angle, axis);
+                    }
+                    transform_component->setPosition(new_translation);
+                    transform_component->setRotation(new_rotation);
+                }
+            }
+        }
+
+    }
+
     void Level::tick(float delta_time)
     {
         if (!m_is_loaded)
@@ -189,16 +392,6 @@ namespace Piccolo
         }
 
         m_gobjects.erase(go_id);
-    }
-
-    void Level::generateMaze() {
-        //
-
-        //
-
-        //
-
-        //
     }
 
 } // namespace Piccolo
